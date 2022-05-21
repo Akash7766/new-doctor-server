@@ -32,6 +32,14 @@ async function run() {
       const result = await cursor.toArray();
       res.send(result);
     });
+    // get user booking
+    app.get("/booking", async (req, res) => {
+      const email = req.query.email;
+      const query = { email };
+      const booking = await bookingCollection.find(query).toArray();
+      res.send(booking);
+    });
+
     // book appoinment api
     app.post("/booking", async (req, res) => {
       const booking = req.body;
