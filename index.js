@@ -49,6 +49,12 @@ async function run() {
       const result = await cursor.toArray();
       res.send(result);
     });
+    // get all users api
+    app.get("/users", verifyJWT, async (req, res) => {
+      const users = await usersCollection.find().toArray();
+      res.send(users);
+    });
+
     // get user booking
     app.get("/booking", verifyJWT, async (req, res) => {
       const email = req.query.email;
@@ -80,6 +86,35 @@ async function run() {
         expiresIn: "1d",
       });
       res.send({ result, token });
+    });
+
+    // make admin api
+    app.put("/user/admin/:email", verifyJWT, async (req, res) => {
+      const requesterEmail = req.decoded.email;
+      const email = req.params.email;
+      const filter = { email: email };
+
+      const requester = await usersCollection.findOne({
+        email: requesterEmail,
+      });
+      if (requester.role === "admin") {
+        const updateDoc = {
+          $set: { role: "admin" },
+        };
+        const result = await usersCollection.updateOne(filter, updateDoc);
+
+        return res.send(result);
+      } else {
+        return res.status(403).send({ message: "forbiden access" });
+      }
+    });
+
+    // check admin status
+    app.get("/admin/:email", async (req, res) => {
+      const email = req.params.email;
+      const user = await usersCollection.findOne({ email: email });
+      const isAdmin = user.role === "admin";
+      res.send({ admin: isAdmin });
     });
 
     // book appoinment api
