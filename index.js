@@ -1,6 +1,7 @@
 const express = require("express");
 const app = express();
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
 
 require("dotenv").config();
 const { MongoClient, ServerApiVersion } = require("mongodb");
@@ -17,6 +18,21 @@ const client = new MongoClient(uri, {
   serverApi: ServerApiVersion.v1,
 });
 
+function verifyJWT(req, res, next) {
+  const authHeader = req.headers.authoraization;
+  if (!authHeader) {
+    return res.status(401).send({ message: "UnAuthoraze access" });
+  }
+  const token = authHeader.split(" ")[1];
+  jwt.verify(token, process.env.secret, function (err, decoded) {
+    if (err) {
+      return res.status(403).send({ message: "Auth forbiden" });
+    }
+    req.decoded = decoded;
+    next();
+  });
+}
+
 async function run() {
   try {
     await client.connect();
@@ -25,6 +41,7 @@ async function run() {
       .db("doctor-portal")
       .collection("schedule");
     const bookingCollection = client.db("doctor-portal").collection("booking");
+    const usersCollection = client.db("doctor-portal").collection("users");
     // doctors schedule list api
     app.get("/schdule", async (req, res) => {
       const query = {};
@@ -33,11 +50,36 @@ async function run() {
       res.send(result);
     });
     // get user booking
-    app.get("/booking", async (req, res) => {
+    app.get("/booking", verifyJWT, async (req, res) => {
       const email = req.query.email;
-      const query = { email };
-      const booking = await bookingCollection.find(query).toArray();
-      res.send(booking);
+      const decodedEmail = req.decoded.email;
+      if (decodedEmail === email) {
+        const query = { email };
+        const booking = await bookingCollection.find(query).toArray();
+        return res.send(booking);
+      } else {
+        return res.status(403).send({ message: "Access forbiden" });
+      }
+    });
+
+    // upsert user information
+    app.put("/user/:email", async (req, res) => {
+      const email = req.params.email;
+      const user = req.body;
+      const filter = { email: email };
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: user,
+      };
+      const result = await usersCollection.updateOne(
+        filter,
+        updateDoc,
+        options
+      );
+      const token = jwt.sign({ email: email }, process.env.secret, {
+        expiresIn: "1d",
+      });
+      res.send({ result, token });
     });
 
     // book appoinment api
