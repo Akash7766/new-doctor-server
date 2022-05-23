@@ -42,6 +42,21 @@ async function run() {
       .collection("schedule");
     const bookingCollection = client.db("doctor-portal").collection("booking");
     const usersCollection = client.db("doctor-portal").collection("users");
+    const doctorsCollection = client.db("doctor-portal").collection("doctors");
+
+    // verify admin
+    const verifyAdmin = async (req, res, next) => {
+      const requesterEmail = req.decoded.email;
+      const requester = await usersCollection.findOne({
+        email: requesterEmail,
+      });
+      if (requester.role === "admin") {
+        next();
+      } else {
+        return res.status(403).send({ message: "Access forbiden" });
+      }
+    };
+
     // doctors schedule list api
     app.get("/schdule", async (req, res) => {
       const query = {};
@@ -89,24 +104,14 @@ async function run() {
     });
 
     // make admin api
-    app.put("/user/admin/:email", verifyJWT, async (req, res) => {
-      const requesterEmail = req.decoded.email;
+    app.put("/user/admin/:email", verifyJWT, verifyAdmin, async (req, res) => {
       const email = req.params.email;
       const filter = { email: email };
-
-      const requester = await usersCollection.findOne({
-        email: requesterEmail,
-      });
-      if (requester.role === "admin") {
-        const updateDoc = {
-          $set: { role: "admin" },
-        };
-        const result = await usersCollection.updateOne(filter, updateDoc);
-
-        return res.send(result);
-      } else {
-        return res.status(403).send({ message: "forbiden access" });
-      }
+      const updateDoc = {
+        $set: { role: "admin" },
+      };
+      const result = await usersCollection.updateOne(filter, updateDoc);
+      return res.send(result);
     });
 
     // check admin status
@@ -132,6 +137,24 @@ async function run() {
         const result = await bookingCollection.insertOne(booking);
         res.send({ success: true, result: result });
       }
+    });
+
+    // get  doctor
+    app.get("/doctors", async (req, res) => {
+      const result = await doctorsCollection.find().toArray();
+      res.send(result);
+    });
+    // delete  doctor
+    app.delete("/doctors/:email", verifyJWT, verifyAdmin, async (req, res) => {
+      const email = req.params.email;
+      const result = await doctorsCollection.deleteOne({ email: email });
+      res.send(result);
+    });
+    // post doctor
+    app.post("/doctors", verifyJWT, verifyAdmin, async (req, res) => {
+      const doctor = req.body;
+      const result = await doctorsCollection.insertOne(doctor);
+      res.send(result);
     });
 
     // filtering available schedul list
